@@ -21,7 +21,7 @@ Other Interests:
   - Attention Model
 
 ## 2. News Article Stock Sentiment
-#### Objective:
+### Objective:
   i)  Given news articles, does that reflect a positive or negative sentiment?
 
   ii) Identify what qualifies as a negative and positive sentiment
