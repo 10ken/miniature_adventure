@@ -1,7 +1,7 @@
 # miniature-adventure
 
-1. Time Series Stock Prediction
-Objective:
+## 1. Time Series Stock Prediction
+### Objective:
 Build a model that is tuned 
 
 Some Taks
@@ -20,8 +20,8 @@ Some Taks
 Other Interests:
   - Attention Model
 
-2. News Article Stock Sentiment
-Objective:
+## 2. News Article Stock Sentiment
+#### Objective:
   i)  Given news articles, does that reflect a positive or negative sentiment?
 
   ii) Identify what qualifies as a negative and positive sentiment
