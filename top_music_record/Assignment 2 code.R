@@ -32,7 +32,8 @@ summary(SongsLog1)
 
 # True or False?
 # 1. The higher our confidence about time signature, key and tempo, the more likely the song is to be in the Top 10
-# 2. In general, if the confidence is low for the time signature, tempo, and key, then the song is more likely to be complex. What does our model suggest in terms of complexity?
+# 2. In general, if the confidence is low for the time signature, tempo, and key, then the song is more likely to be complex. 
+        # What does our model suggest in terms of complexity?
 
 
 # You can make predictions on the test set by using the command:
@@ -67,7 +68,7 @@ Accuracy.rate<-Count.correct/(Count.correct+Count.wrong)
 # What is the prediction accuracy of the model?
 
 # To generate the ROC curve
-install.packages("pROC")
+# install.packages("pROC")
 library(pROC)
 test_prob = predict(SongsLog1, newdata = SongsTest, type = "response")
 test_roc = roc(SongsTest$Top10 ~ test_prob, plot = TRUE, print.auc = TRUE)

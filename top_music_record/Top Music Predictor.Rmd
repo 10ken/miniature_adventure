@@ -1,0 +1,348 @@
+---
+title: "Top Song Predictor"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(dplyr)
+library(ggplot2)
+library(pROC)
+library(tidyverse)
+```
+
+# Helper Functions
+
+```{r pressure, echo=FALSE}
+standardize <- function(column){
+  # standardize a single column
+    # centers the data around 0 and divide by the variance
+  sigma_sq = var(column)
+  mu = mean(column)
+  return( (column-mu)/sigma_sq)
+}
+
+replace_outliers <- function(column){
+  # This function replaces outliers with the upper and lower 
+  
+  second_quant = quantile(column, probs=0.25)
+  third_quant = quantile(column, probs=0.75)
+  iqr =  third_quant - second_quant
+  
+  # boundaries
+  upper = third_quant + 1.5*iqr
+  lower = second_quant - 1.5*iqr
+  
+  # num of rows
+  n = length(column)
+  
+  for (i in 1:n){
+    val = column[i]
+    
+    # if row val is > upper boundary
+    if (val > upper){
+      
+        #replace outlier
+        column[i] = upper
+      
+      # if row val is < lower boundary
+    } else if ( val < lower ){
+      
+        # replace outlier
+        column[i] = lower
+    }
+  }
+  return (column)
+}
+
+classification_report <- function(model, thresh=0.30){
+  # You can make predictions on the test set by using the command:
+  testPredict = predict(model, newdata=SongsTest, type="response")
+  
+  # Then, you can create a confusion matrix with a threshold of 0.15 by using the table command:
+  confusion.matrix<-table(SongsTest$Top10, testPredict >= thresh)
+  
+  # Getting true and false positive and negatives 
+  TP <- confusion.matrix[2,2]
+  TN <- confusion.matrix[1,1]
+  FP <- confusion.matrix[1,2]
+  FN <- confusion.matrix[2,1]
+  
+  # Classifier Performance Metrics
+  accuracy = (TP + TN) / (TP + FP + TN + FN)
+  precision = TP / (TP + FP)
+  recall = TP / (TP + FN)
+  f1 = 2 * ( precision * recall) / (precision + recall)
+  
+  results <- c(accuracy, precision, recall, f1)
+  
+  return(results)
+}
+
+```
+
+# Data Analysis
+```{r}
+data <-read.csv('MusicData.csv')
+data[is.na(data)]
+```
+There is no missing data
+
+```{r}
+dim(data)
+```
+There's 7574 rows and 39 columns
+
+```{r}
+p <- ggplot(data, aes(x=tempo)) + geom_histogram(bins = 100)
+print(p)
+
+p <- ggplot(data, aes(x=loudness)) + geom_histogram(bins = 100)
+print(p)
+
+p <- ggplot(data, aes(x=energy)) + geom_histogram(bins = 100)
+print(p)
+
+```
+
+
+# Data Processing
+
+```{r}
+
+# standardize data = center data and get equal variance
+data$loudness <- standardize(data$loudness)
+data$tempo <- standardize(data$tempo)
+data$energy <- standardize(data$energy)
+
+# replace the outliers for standardized variables
+data$loudness <- replace_outliers(data$loudness)
+data$tempo <- replace_outliers(data$tempo)
+data$energy <- replace_outliers(data$energy)
+```
+
+
+# Train - Test Split
+```{r}
+SongsTrain = data %>% filter(year <= 2009)
+SongsTest = data %>% filter(year == 2010)
+
+#non-predictors
+nonvars = c("year", "songtitle", "artistname", "songID", "artistID")
+
+# To remove these variables from your training and testing sets:
+SongsTrain = SongsTrain[ , !(names(SongsTrain) %in% nonvars) ]
+SongsTest = SongsTest[ , !(names(SongsTest) %in% nonvars) ]
+```
+
+# Modelling
+```{r}
+mod1 <- glm(formula = Top10 ~ . , family = binomial, data = SongsTrain) 
+
+mod2 <- glm(formula = Top10 ~ . - timbre_8_min - timbre_8_max - timbre_2_min,
+            family = binomial, data = SongsTrain)
+mod3 <- glm(formula = Top10 ~ . - timbre_8_min - timbre_8_max - timbre_2_min
+            - key - timbre_6_max - timesignature - timbre_7_max, 
+            family = binomial, data = SongsTrain)
+
+mod4 <- glm(formula = Top10 ~ . - timbre_8_min - timbre_8_max - timbre_2_min
+            - key - timbre_6_max - timesignature - timbre_7_max 
+            - key_confidence - timbre_7_min - timbre_10_min, 
+            family = binomial, data = SongsTrain)
+
+mod5 <- glm(formula = Top10 ~ . - timbre_8_min - timbre_8_max - timbre_2_min
+            - key - timbre_6_max - timesignature - timbre_7_max 
+            - key_confidence - timbre_7_min - timbre_10_min-energy, 
+            family = binomial, data = SongsTrain)
+
+mod6 <- glm(formula = Top10 ~ . - timbre_8_min - timbre_8_max - timbre_2_min
+            - key - timbre_6_max - timesignature - timbre_7_max 
+            - key_confidence - timbre_7_min - timbre_10_min-energy - tempo
+            - timbre_1_max - timbre_2_max - timbre_3_min - timbre_5_max 
+            -timbre_9_min  - timbre_9_max,
+            family = binomial, data = SongsTrain)
+```
+
+
+# Performance
+```{r}
+eval1 <- classification_report(mod1)
+eval2 <- classification_report(mod2)
+eval3 <- classification_report(mod3)
+eval4 <- classification_report(mod4)
+eval5 <- classification_report(mod5)
+eval6 <- classification_report(mod6)
+
+results <- data.frame(first_mod = c(0,0,0,0), second_mod = eval2-eval1, third_mod=eval3-eval1, fourth_mod=eval4-eval1, fifth_mod=eval5-eval1,
+                      sixth_mod = eval6-eval1)
+
+metrics <-c("accuracy","precision","recall","f1")
+rownames(results) <- metrics
+
+# transpose results
+results <- as.data.frame(t(results))
+
+results
+```
+
+# plot the performance
+```{r}
+ggplot(results, aes(x=c(1,2,3,4,5,6))) +  
+  geom_line(aes(y = accuracy), color = "black") +
+  geom_line(aes(y =precision), color = "red") +
+  geom_line(aes(y = recall), color = "green") +
+  geom_line(aes(y = f1), color = "blue") + 
+  xlab("Model Number") + 
+  ylab("Differences") + 
+  ggtitle("Difference in Model Performance") 
+
+```
+The first model had used all predictors.
+
+### Model 2
+Based off the p-value for the predictors, we removed an additional 3 variables that was the most insignificant, which were `timbre_8_min`, `timbre_8_max`, and `timbre_2_min`. The model's overall performance had improved.
+
+### Model 3
+Based off the p-value for the predictors, we removed  an additional 4 variables that was the most insignificant, `key`, `timbre_6_max`, `timesignature`, and `timbre_7_max`. The model's performance had signficanetly decreased in all areas of performance.
+
+### Model 4
+Based off the p-value for the predictors, we removed an additional 3 variables that was the most insignificant,`key_confidence`, `timbre_7_max`, and `timbre_10_min`. There was an improvement from model 3 but not quite as good performing as model 2. Model 4 is perferred over model 2 since its performance metrics are similar and model 4 has less complexity.
+
+### Model 5
+Based off the p-value for the predictors, we removed an additional variable that was the most insignificant, `energy`. This model would be the most perferred over the previous models since it has the lowest complexity and best performance metrics in all 4 areas, accuracy, precision, recall, and f1 score.
+
+### Model 6
+Based off the p-value for the predictors, we removed an additional variable that was the most insignificant, `tempo`,`timbre_1_max`,`timbre_2_max` , `timbre_3_min`,`timbre_5_max`,`timbre_9_min` and `timbre_9_max`. The performance had decreased in all areas. All predictors are significant. If we were to only consider the accuracy of a model, then we would prefer model 6 over model 5 since the complexity of model 6 is 7 variables less than model 5 and a relatively similar performing model with a lower complexity is preferred.
+
+```{r}
+performances <- data.frame(first_mod = eval1, second_mod = eval2, third_mod=eval3, fourth_mod=eval4, fifth_mod=eval5, sixth_mod=eval6)
+
+rownames(performances) <- metrics
+
+# transpose performances
+performances <- as.data.frame(t(performances))
+performances
+```
+
+The final model with its predictors is shown below.
+```{r}
+summary(mod6)
+```
+
+
+```{r}
+base_last <- data.frame(first_mod = eval1, sixth_mod=eval6)
+
+rownames(base_last) <- metrics
+
+# transpose results
+base_last <- as.data.frame(t(base_last))
+base_last
+```
+
+
+```{r}
+thresholds = seq.int(5,84,5)/100
+
+acc <- c()
+pre <- c()
+rec <- c()
+f1 <- c()
+
+for (i in thresholds){
+  values <- classification_report(mod6,i)
+  acc <- append(acc, values[1])
+  pre <- append(pre, values[2])
+  rec <- append(rec, values[3])
+  f1 <- append(f1, values[4])
+}
+
+best_thresh <- data.frame(accuracy = acc, precision = pre, recall = rec, f1 = f1)
+
+plot_it <- ggplot(best_thresh, aes(x=thresholds[1:16])) +  
+  geom_line(aes(y = accuracy), color = "black") +
+  geom_line(aes(y =precision), color = "red") +
+  geom_line(aes(y = recall), color = "green") +
+  geom_line(aes(y = f1), color = "blue") + 
+  xlab("Probability Thresholds") + 
+  ylab("Performances") + 
+  ggtitle("Performance Trade Off")
+
+plot_it
+
+```
+
+Our best middle ground is about when the threshold is 0.30
+```{r}
+classification_report(mod6,0.30)
+# accuracy, precision, recall, f1
+```
+
+# Interpret Coefficients
+```{r}
+mod_summary <- summary(mod6)
+mod_summary
+```
+The coefficients above are  logged odd ratios. 
+```{r}
+print(mod_summary$coefficients[2:6])
+```
+
+timesignature_confidence      0.78
+loudness                      3.19
+tempo_confidence              0.48
+pitch h                      -57.94                   
+timbre_0_min                  0.02
+
+To understand the coeffients we need to have an exponential transformation on the coefficients
+```{r}
+print(exp(mod_summary$coefficients[2:6]))
+```
+
+For each unit of increase in timesignature_confidence, there is an increase odds of 2.19 the song will be a top billboard song on average.
+
+For each unit of loudness, there is an increase in odds of 3.19 the song will be a top billboard song on average.
+
+For each unit of tempo_confidence, there is an increase in odds of  0.48 the song will be a top billboard song on average.
+
+For each unit of pitch, there is an increase in odds of -57.94 the song will be a top billboard song on average.
+
+For each unit of timbre_0_min, there is an increase in odds of 0.02 the song will be a top billboard song on average.
+                                 
+                  
+
+# ROC
+```{r}
+test_prob = predict(mod6, newdata = SongsTest, type = "response")
+test_roc = roc(SongsTest$Top10 ~ test_prob, plot = TRUE, print.auc = TRUE)
+test_roc
+```
+
+
+The AUC value of 0.848 means the model predicted 84.8% predictions correctly from the testing data.
+
+## Some predictions
+```{r}
+testPredict = predict(mod6, newdata=SongsTest, type="response")
+testPredict[1:10]
+```
+Above shows the prediction probabilities
+```{r}
+testPredict[1:10] > 0.30
+```
+
+In the case above, only song number 10 will be a top billboards song.
+
+
+```{r}
+table(SongsTest$Top10, testPredict >= 0.30)
+```
